@@ -3,6 +3,13 @@
   Date : 2014-12
   
   Copyright : https://tinypng.com/
+  Intro : 纯粹模拟浏览器的行为，上传图片并下载图片
+          如果使用 官网提供的 key-api 方式，免费用户，每个月限制是500张，也不稳定
+          https://tinypng.com/developers
+  
+  2014-12-19
+    研究发现，在没有vpn的情况下，不太稳定
+    所以改为：一张一张图上传，然后一张一张下载
 */
 
 var https = require('https');
@@ -19,6 +26,9 @@ var maxLen = 20;  //每次20个
 var imagesUrl = []; //只有url
 var imagesUrlMix = []; //有url 和 url对应的file
 
+// 上传的文件集合
+var files = [];
+
 // 发送图片的请求时间间隔 2秒
 var requestInterval = 2 * 1000;
 
@@ -34,11 +44,11 @@ var config = {
   fromPath : "./images/",
 
   // 默认 只压缩png图片
-  // 如果关闭，jpg也会上传压缩
+  // 如果设置为 false，jpg也会上传压缩
   onlyPng : true,
   
   // 压缩后的文件所放到的目录(没有这个目录，会动态创建)
-  toPath : "./tinypng-images/"
+  toPath : "./images-by-tinypng-paper/"
 }
 
 var httpOptions = {
@@ -67,9 +77,10 @@ var getMime = function (file) {
     '.jpg' : 'image/jpeg'
   };
   
-  return mime = mimes[path.extname(file)];
+  return mimes[path.extname(file)];
 }
 
+// 得到目标路径，如果没有就动态创建
 function getToPath(){
   
   if (!fs.existsSync(config.toPath)) {
@@ -79,32 +90,38 @@ function getToPath(){
   return config.toPath;
 }
 
+// 判断上传文件类型
 function checkFile(file){
-  //console.log( file.indexOf(".png") > -1 );
-  //console.log( !config.onlyPng && file.indexOf(".jpg") > -1 );
-  
   if( file.indexOf(".png") > -1 ) return true;
   if( !config.onlyPng && file.indexOf(".jpg") > -1 ) return true;
   
   return false;
 }
 
-var filesLength = 0;
+// 打log
+function showLog(msg, title){
+ 
+  if( title ){
+    console.log("*** "+ title +" ***");
+  }
+  
+  console.log(msg);
+  console.log("---------------------------------");
+}
 
 // 获取图片
 function getImages( callback ){
-  var files = [];
   
   fs.readdir(config.fromPath, function(err, list){
     if (err){
-      console.log( "错误: 图片文件夹地址错误" );
+      showLog("错误: 图片文件夹地址错误");
       return;
     }
     
     var len = list.length;
     
     if( !len || len > maxLen ){
-      console.log( "警告: 图片文件夹为空 或 图片个数大于20个" );
+      showLog("警告: 图片文件夹为空 或 图片个数大于20个");
       return;
     }
     
@@ -118,129 +135,138 @@ function getImages( callback ){
     });
     
     if( files.length == 0 ){
-       console.log( "警告: 没有满足条件的图片(png or jpg, 小于 5MB)" );
-       return;
+      showLog("警告: 没有满足条件的图片(png or jpg, 小于 5MB)")
+      return;
     }
     
-    console.log("等待压缩的图片：");
-    console.log(files);
+    showLog(files, "等待压缩的图片：");
     
-    filesLength = files.length;
-    
-    callback && callback(files);
+    callback && callback();
   });
   
 }//end getImages
 
 
-// 上传图片，并发运行
-function uploadImage(files, callback){
-    
-  files.forEach(function(file, i){
-    var filePath = config.fromPath + file;
-    
-    setTimeout(function(){
-    
-      var reqTime = null;
-      var data = "";
-      
-      httpOptions.headers["Content-Length"] = fs.statSync(filePath).size;
-      httpOptions.headers["Content-Type"] = getMime(file);
-      
-      var req = https.request(httpOptions, function(res){
-      
-        res.on('data', function (chunk) {
-          data += chunk;
-        });
-        
-        res.on("end", function () {
-          clearTimeout(reqTime);
-          
-          filesLength--;
-          callback && callback(data, file);
-        });
-       
-      }).on('error', function(e){
-        console.log("错误: "+ file +" 请求服务器发生错误");
-        
-        filesLength--;
-        callback && callback(data, file);
-      });
-      
-      //req.setHeader('Content-Length', fs.statSync(filePath).size);
-      //req.setHeader('Content-Type', getMime(file));
-      //req.write(fs.readFileSync(filePath));
-
-      var fileStream = fs.createReadStream(filePath, { bufferSize: 4 * 1024 });
-      fileStream.pipe(req, {end: false});
-      
-      fileStream.on('end', function() {
-        req.end();
-      });
- 
-      console.log("发送"+ file +"中...等待响应...");
-      
-      reqTime = setTimeout(function(){
-        req.abort();
-        console.log("发送"+ file +"数据请求超时失败");
-        
-        filesLength--;
-        callback && callback(data, file);
-      }, requestTimeout);
-      
-    }, requestInterval * i);
-    
-  });
-}//end uploadImage
-
-// 下载图片
-function downloadImage(data, file){
-  console.log( "---------------------------" );
-  console.log( "服务器响应了 "+ file +" ，得到返回的数据：" );
-  console.log( data );
+// 上传图片
+// 好像不能并发上传，并发很容易超时，尝试一个一个上传
+function uploadImage(callback){
   
-  try{
-    var imgUrl = JSON.parse(data).output.url;
-  }catch(e){
-    console.log("错误: 没有等到返回的 "+ file +" 图片地址");
-    
-    // 当全部获取到了图片时，再一个一个下载，官网有限制。
-    if( filesLength == 0 ){
-      downloadImageOnByOne();
+  // 判断是不是全部上传完毕
+  function checkUploadAllOver(){    
+    if( files.length == 0 ){
+      showLog("提醒: 图片已经全部上传");
+      
+      callback && callback();
+    }else{
+      uploadOneByOne();
+    }
+  }
+  
+  // 某个文件上传完成
+  function uploadEnd(data, file){
+
+    try{
+      var imgUrl = JSON.parse(data).output.url;
+    }catch(e){
+      showLog("错误: 没有得到返回的 "+ file +" 图片地址");
+      
+      checkUploadAllOver();
+      return;
     }
     
-    return;
+    showLog("服务器响应了 "+ file +" ，得到返回的数据 data：" + data );
+    
+    imgUrl = imgUrl + "/" + file;
+    
+    var toPath = getToPath() + "/";
+    
+    //把图片地址，存到目标目录下
+    imagesUrl.push( imgUrl );
+    imagesUrlMix.push( [imgUrl, file] );
+    
+    fs.writeFile(toPath + 'tinypng_imagesUrl.txt', imagesUrl.join("\r\n"), function(){} ); 
+    
+    checkUploadAllOver();
   }
   
-  imgUrl = imgUrl + "/" + file;
+  function uploadOneByOne(){
+    
+    var file = files.pop();
+    var filePath = config.fromPath + file;
+    
+    var reqTime = null;
+    var data = "";
+    
+    showLog(filePath, "文件路径");
+    
+    httpOptions.headers["Content-Length"] = fs.statSync(filePath).size;
+    httpOptions.headers["Content-Type"] = getMime(file);
+    
+    var req = https.request(httpOptions, function(res){
+    
+      res.on('data', function (chunk) {
+        data += chunk;
+      });
+      
+      res.on("end", function () {
+        clearTimeout(reqTime);
+        uploadEnd(data, file);
+      });
+     
+    }).on('error', function(e){
+      showLog("错误: "+ file +" 请求服务器发生错误");
+      
+      clearTimeout(reqTime);
+      uploadEnd(data, file);
+    });
+    
+    //req.setHeader('Content-Length', fs.statSync(filePath).size);
+    //req.setHeader('Content-Type', getMime(file));
+    //req.write(fs.readFileSync(filePath));
+
+    var fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(req, {end: false});
+    
+    fileStream.on('end', function() {
+      req.end();
+    });
+    
+    showLog("发送"+ file +"中...等待响应...");
+    
+    // 超时判断
+    reqTime = setTimeout(function(){
+      req.abort();
+      showLog("发送"+ file +"数据请求超时失败");
+      
+      uploadEnd(data, file);
+    }, requestTimeout);
+
+  }//end uploadOneByOne
   
-  var toPath = getToPath() + "/";
+  uploadOneByOne();
   
-  //把图片地址，存到目标目录下
-  imagesUrl.push( imgUrl );
-  imagesUrlMix.push( [imgUrl, file] );
-  
-  fs.writeFile(toPath + 'tinypng_imagesUrl.txt', imagesUrl.join("\r\n"), function(){} ); 
-  
-  // 当全部获取到了图片时，再一个一个下载，官网有限制。
-  if( filesLength == 0 ){
-    downloadImageOnByOne();
-  }
-  
+}//end uploadImage
+
+// 上传完毕后，下载图片
+function downloadImage(){
+
   // 一个一个下载图片
   function downloadImageOnByOne(){
-    if( imagesUrlMix.length == 0 ) return;
+    if( imagesUrlMix.length == 0 ){
+      return;
+    }
     
     var img = imagesUrlMix.pop();
     var imgUrl = img[0];
     var file = img[1];
     
-    console.log("正在下载图片: " + imgUrl);
+    showLog("正在下载图片: " + imgUrl);
 
     var reqTime = null;
    
     var req = https.get(imgUrl, function (res) {
       var imgData = "";
+      
       res.setEncoding("binary");
       
       res.on("data", function (chunk) {
@@ -250,41 +276,44 @@ function downloadImage(data, file){
       res.on("end", function () {
         
         clearTimeout(reqTime);
-        console.log("得到了 "+ file +" 图片数据");
+        showLog("得到了 "+ file +" 图片数据");
         
         fs.writeFile(getToPath() + file, imgData, "binary", function (err) {
           if (err) {
-            console.log("写入 "+ file +" 失败");
+            showLog("写入 "+ file +" 失败");
           } else {
-            console.log("写入 "+ file +" 成功");
+            showLog("写入 "+ file +" 成功！");
           }
           
           downloadImageOnByOne();
         });
       });
     }).on('error', function(e){
-      console.log("下载 "+ file +" 失败");
+      showLog("下载 "+ file +" 失败，请选择迅雷下载");
       
+      clearTimeout(reqTime);
       downloadImageOnByOne();
     });
     
     reqTime = setTimeout(function(){
       req.abort();
-      console.log("下载 "+ file +"超时失败，请选择迅雷下载");
+      showLog("下载 "+ file +"超时失败，请选择迅雷下载");
       
       downloadImageOnByOne();
     }, downloadTimeout);
       
   }//end downloadImageOnByOne
   
+  downloadImageOnByOne();
+  
 }//end downloadImage
 
 // let's go
 function letsgo(){
 
-  getImages(function(files){
-    uploadImage(files, function(data, file){
-      downloadImage(data, file);
+  getImages(function(){
+    uploadImage(function(){
+      downloadImage();
     });
   });
   
