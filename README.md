@@ -6,7 +6,11 @@ tinypng-node-plugin
 
 ###ChangeLog
 
-#####1.1
+####1.2
+1. 提高下载图片成功率。下载图片时，模拟浏览器下载  
+1. 注释上传图片时传的cookie  
+   
+####1.1
 1. 如果使用 官网提供的 key-api 方式 (https://tinypng.com/developers)  
    每个月限制是500张(免费用户)，也不稳定（大陆）
    
