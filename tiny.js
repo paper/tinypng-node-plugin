@@ -256,7 +256,7 @@ function uploadImage(callback){
 function downloadImage(){
 
   // 一个一个下载图片
-  function downloadImageOnByOne(){
+  function downloadImageOneByOne(){
     if( imagesUrlMix.length == 0 ){
       return;
     }
@@ -302,26 +302,26 @@ function downloadImage(){
             showLog("写入 "+ file +" 成功！");
           }
           
-          downloadImageOnByOne();
+          downloadImageOneByOne();
         });
       });
     }).on('error', function(e){
       showLog("下载 "+ file +" 失败，请选择迅雷下载");
       
       clearTimeout(reqTime);
-      downloadImageOnByOne();
+      downloadImageOneByOne();
     });
     
     reqTime = setTimeout(function(){
       req.abort();
       showLog("下载 "+ file +"超时失败，请选择迅雷下载");
       
-      downloadImageOnByOne();
+      downloadImageOneByOne();
     }, downloadTimeout);
       
-  }//end downloadImageOnByOne
+  }//end downloadImageOneByOne
   
-  downloadImageOnByOne();
+  downloadImageOneByOne();
   
 }//end downloadImage
 
