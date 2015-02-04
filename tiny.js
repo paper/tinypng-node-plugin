@@ -10,11 +10,16 @@
   2014-12-19
     研究发现，在没有vpn的情况下，不太稳定
     所以改为：一张一张图上传，然后一张一张下载
+    
+  2015-02-04
+    注释上传图片时传的cookie
+    下载图片时，模拟浏览器下载
 */
 
 var https = require('https');
 var fs = require('fs');
 var path = require("path");
+var url = require('url');
 
 // tinypng 官网说的 （不可配置）
 var maxSize = 5 * 1024 * 1024; // max 5MB each
@@ -64,7 +69,7 @@ var httpOptions = {
     "Connection"  : "keep-alive",
     "Host" : "tinypng.com",
     "Pragma" : "no-cache",
-    "Cookie" : "_ga=GA1.2.1201006353.1418720682",
+    //"Cookie" : "_ga=GA1.2.1201006353.1418720682",
     "Referer" : "https://tinypng.com/",
     "User-Agent" : "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:31.0) Gecko/20100101 Firefox/31.0"
   }
@@ -264,7 +269,19 @@ function downloadImage(){
 
     var reqTime = null;
    
-    var req = https.get(imgUrl, function (res) {
+    //var req = https.get(imgUrl, function (res) {
+    var req = https.get({
+      host: 'tinypng.com',
+      path: url.parse(imgUrl).path,
+      method: 'GET',
+      headers: {
+        'Connection': 'keep-alive',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36',
+        'Accept-Encoding': 'gzip, deflate, sdch',
+        'Accept-Language': 'zh-CN,zh;q=0.8,en;q=0.6'
+      }
+    }, function (res) {
       var imgData = "";
       
       res.setEncoding("binary");
