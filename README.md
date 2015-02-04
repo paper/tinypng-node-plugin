@@ -15,4 +15,4 @@ tinypng-node-plugin
 
 
 ###Demo 截图
-![](./screenshot/cmd.png)
+![](./screenshot/cmd.jpg)
