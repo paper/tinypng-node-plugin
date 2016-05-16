@@ -59,19 +59,21 @@ var config = {
 var httpOptions = {
   host: "tinypng.com",
   method: "post",
-  path: "/web/shrink",
+  path: "/site/shrink",
 
   headers: {
     "Accept" : "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Encoding" : "gzip, deflate",
     "Accept-Language" : "zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3",
     "Cache-Control" : "no-cache",
+    "Pragma" : "no-cache",
     "Connection"  : "keep-alive",
     "Host" : "tinypng.com",
+    "DNT" : 1,
     "Pragma" : "no-cache",
     //"Cookie" : "_ga=GA1.2.1201006353.1418720682",
     "Referer" : "https://tinypng.com/",
-    "User-Agent" : "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:31.0) Gecko/20100101 Firefox/31.0"
+    "User-Agent" : "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:42.0) Gecko/20100101 Firefox/42.0"
   }
 }//end options
 
