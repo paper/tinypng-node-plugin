@@ -4,6 +4,8 @@ tinypng-node-plugin
 纯粹模拟浏览器的行为  
 自动上传图片到 https://tinypng.com/ 官网，并自动下载压缩后的图片
 
+gulp插件版本地址：https://github.com/paper/gulp-tinypng-nokey
+
 ###ChangeLog
 
 ####1.2
